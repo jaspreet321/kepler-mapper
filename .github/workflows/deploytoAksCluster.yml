@@ -1,0 +1,50 @@
+on: [push]
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    
+    - uses: azure/docker-login@v1
+      with:
+        login-server: volurcontainer.azurecr.io
+        username: ${{ secrets.acr_volurcontainer_username }}
+        password: ${{ secrets.acr_volurcontainer_password }}
+    
+    - name: Build and push image to ACR
+      id: build-image
+      run: |
+        docker build "$GITHUB_WORKSPACE/https://github.com/jaspreet321/kepler-mapper" -f  "https://github.com/jaspreet321/kepler-mapper" -t volurcontainer.azurecr.io/volurkuber:${{ github.sha }} --label dockerfile-path=https://github.com/jaspreet321/kepler-mapper
+        docker push volurcontainer.azurecr.io/volurkuber:${{ github.sha }}
+    
+    - uses: azure/k8s-set-context@v1
+      with:
+         kubeconfig: ${{ secrets.aks_volurkuber_kubeConfig }}
+      id: login
+    
+    - name: Create namespace
+      run: |
+        namespacePresent=`kubectl get namespace | grep default | wc -l`
+        if [ $namespacePresent -eq 0 ]
+        then
+            echo `kubectl create namespace default`
+        fi
+
+    - uses: azure/k8s-create-secret@v1
+      with:
+        namespace: default
+        container-registry-url: volurcontainer.azurecr.io
+        container-registry-username: ${{ secrets.acr_volurcontainer_username }}
+        container-registry-password: ${{ secrets.acr_volurcontainer_password }}
+        secret-name: volurkuberdockerauth
+       
+    - uses: azure/k8s-deploy@v1.2
+      with:
+        namespace: default
+        manifests: |
+          manifests/deployment.yml
+          manifests/service.yml
+        images: |
+          volurcontainer.azurecr.io/volurkuber:${{ github.sha }}
+        imagepullsecrets: |
+          volurkuberdockerauth
