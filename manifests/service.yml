@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+    name: "volurkuber-71bc"
+    labels:
+        app: "volurkuber-71bc"
+spec:
+    type: LoadBalancer
+    ports:
+    - port: 443
+      targetPort: 443
+      protocol: TCP
+      name: http
+    selector:
+        app: "volurkuber-71bc"
